@@ -1,254 +1,243 @@
-#' Realizar ajustes por los efectos fijos de un modelo lineal
+#' Realizar ajustes por efectos fijos de forma interactiva
 #'
-#' Esta función toma los valores reales de alguna característica y los ajusta
-#' por los efectos significativos que indica el modelo stepwise
-#' Además tiene un apartado para realizar filtros de variables numéricas
+#' Esta función guía al usuario a través de una interfaz de consola para:
+#' 1. Seleccionar variables núcleo (Y, ID, Padre, Madre).
+#' 2. Aplicar filtros numéricos opcionales.
+#' 3. Definir un modelo lineal inicial.
+#' 4. Ejecutar un proceso Stepwise (AIC) para seleccionar efectos significativos.
+#' 5. Calcular factores de corrección (FC) y generar una variable ajustada.
 #'
-#' En la ejecución de la función se pedirá por consola la variable a evaluar
-#' además también se pedirá por consola información adicional, como variables a filtrar y sus filtros
-#' y las variables que quiere añadir al modelo stepwise
+#' @param df Un data.frame que contenga todas las variables potenciales para el análisis.
 #'
-#' @param df Un data.frame con información de ID, Padre, Madre, Variable Y, y Variables del modelo
+#' @details
+#' La función utiliza \code{step()} para la selección de variables. Si el modelo resultante
+#' queda vacío (solo intercepto), la función se detiene con un aviso para evitar errores en
+#' el cálculo de VIF o ANOVA. Los factores de corrección para variables continuas se basan
+#' en la pendiente (beta), mientras que para categóricas se basan en la relación entre
+#' medias de niveles.
 #'
-#' @return el dataframe inicial más los factores de ajuste para los efectos utilizados y un Y_ajust
+#' @return Un data.frame (tibble) que contiene las columnas originales, los factores de
+#' corrección generados (\code{fc_variable}) y la variable final ajustada (\code{variable_ajust}).
+#'
 #' @export
 #'
-#' @import tidyverse
-#' @import car
+#' @import dplyr
+#' @import tidyr
+#' @import cli
+#' @importFrom car Anova
+#' @importFrom stats as.formula lm coef step
+#'
+#' @examples
+#' \dontrun{
+#' # Supongamos que tienes un dataframe llamado 'mis_cerdos'
+#' df_ajustado <- AjustEfectFix(mis_cerdos)
+#' }
 
 AjustEfectFix <- function(df) {
-# Validar que el argumento sea un data.frame
-if (!is.data.frame(df)) {
-  stop("El argumento debe ser un data.frame.")
-}
 
-# Mostrar nombres de columnas disponibles
-cat("Aviso: Variables disponibles en el data.frame:\n")
-print(names(df))
-cat("(Escriba la variable tal cual sale)\n")
-
-
-
-# Solicitar nombre de variable a evaluar
-repeat {
-  variable <- readline(prompt = "¿Cuál variable desea evaluar?: ")
-
-  if (variable %in% names(df)) {
-    break
-  } else {
-    cat("La variable ingresada no existe en el data frame. Intente de nuevo.\n \n")
-    cat("Variables disponibles en el data.frame:\n")
-    print(names(df))
+  # --- FUNCIÓN DE SEGURIDAD (BOTÓN DE PÁNICO) ---
+  verificar_salida <- function(entrada) {
+    if (toupper(entrada) == "SALIR") {
+      cli::cli_alert_danger("Proceso cancelado por el usuario.")
+      # Detiene la ejecución de la función padre y vuelve a la consola
+      stop("Ejecución finalizada.", call. = FALSE)
+    }
+    return(entrada)
   }
-}
 
-# Solicitar variable donde se encuentra el padre, madre y el id
-repeat {
-  padre <- readline(prompt = "¿En qué columna se encuentra el padre?: ")
-
-  if (padre %in% names(df)) {
-    break
-  } else {
-    cat("La variable ingresada no existe en el data frame. Intente de nuevo.\n \n")
-    cat("Variables disponibles en el data.frame:\n")
-    print(names(df))
+  pedir_columna_safe <- function(mensaje, df_temp) {
+    repeat {
+      var <- readline(prompt = paste0(mensaje, " (o escribe 'SALIR'): "))
+      var <- verificar_salida(var) # Chequeo inmediato
+      if (var %in% names(df_temp)) return(var)
+      cli::cli_alert_danger("Variable '{var}' no encontrada.")
+    }
   }
-}
 
-repeat {
-  madre <- readline(prompt = "¿En qué columna se encuentra la madre?: ")
+  # --- INICIO ---
+  cat("\014")
+  cli::cli_h1("INTERFAZ DE AJUSTE LINEAL")
+  cli::cli_alert_info("Tip: En cualquier momento escribe 'SALIR' para detener todo.\n")
 
-  if (madre %in% names(df)) {
-    break
-  } else {
-    cat("La variable ingresada no existe en el data frame. Intente de nuevo.\n \n")
-    cat("Variables disponibles en el data.frame:\n")
-    print(names(df))
-  }
-}
+  # 1. Variables Núcleo
+  vars_dispo <- names(df)
+  cli::cli_inform("Variables: {.var {paste(vars_dispo, collapse = ', ')}}")
 
-repeat {
-  id <- readline(prompt = "¿En qué columna se encuentra el id del individuo a evaluar?: ")
+  var_y     <- pedir_columna_safe("\n1. Variable Y", df)
+  var_id    <- pedir_columna_safe("2. Columna ID", df)
+  var_padre <- pedir_columna_safe("3. Columna Padre", df)
+  var_madre <- pedir_columna_safe("4. Columna Madre", df)
 
-  if (id %in% names(df)) {
-    break
-  } else {
-    cat("La variable ingresada no existe en el data frame. Intente de nuevo.\n \n")
-    cat("Variables disponibles en el data.frame:\n")
-    print(names(df))
-  }
-}
+  nucleo <- c(var_y, var_id, var_padre, var_madre)
 
-
-# Verificar si se harán filtros para las variables
-repeat {
-  filtrar <- as.logical(readline(prompt = "¿Desea realizar filtros para las variables?: [TRUE / FALSE] "))
-
-  if (filtrar %in% c(TRUE,FALSE)) {
-    break
-  } else {
-    cat("Ingresar solo TRUE o FALSE")
-  }
-}
-
-# FILTROS
-
-while (filtrar) {
-  cat("Variables disponibles en el data.frame:\n")
-  print(names(df))
-  cat("(Escriba la variable tal cual sale)\n")
-
+  # 2. Sección de Filtros
   repeat {
-    var_filtro <- readline(prompt = "¿Qué variable desea filtrar?: ")
+    cat("\014")
+    cli::cli_h1("CONFIGURACIÓN: {var_y}")
+    cli::cli_li("ID: {var_id} | P: {var_padre} | M: {var_madre}")
+    cat("--------------------------------------------------\n")
 
-    if (var_filtro %in% names(df)) {
-      break
+    # Mostrar disponibles (excluyendo lo ya usado)
+    dispo_actual <- setdiff(names(df), nucleo)
+    cli::cli_inform("Disponibles para filtrar: {.var {paste(dispo_actual, collapse = ', ')}}")
+
+    opcion <- utils::menu(c("Filtrar variable numérica", "Continuar al modelo", "SALIR (Abortar)"),
+                          title = "\n¿Qué desea hacer?")
+
+    if (opcion == 3) verificar_salida("SALIR")
+    if (opcion != 1) break
+
+    v_f <- pedir_columna_safe("Variable a filtrar", df)
+
+    if (is.numeric(df[[v_f]])) {
+      cli::cli_inform("Rango de {v_f}: [{min(df[[v_f]], na.rm=T)} - {max(df[[v_f]], na.rm=T)}]")
+      v_min <- as.numeric(verificar_salida(readline("Mínimo: ")))
+      v_max <- as.numeric(verificar_salida(readline("Máximo: ")))
+
+      n_antes <- nrow(df)
+      df <- df %>% dplyr::filter(!!rlang::sym(v_f) >= v_min & !!rlang::sym(v_f) <= v_max)
+      cli::cli_alert_success("Filtro aplicado. Quedan {nrow(df)} registros.")
+      readline("Presione Enter para continuar...")
     } else {
-      cat("La variable ingresada no existe en el data frame. Intente de nuevo.\n \n")
+      cli::cli_alert_warning("No es numérica.")
+      readline("Presione Enter...")
     }
   }
 
-  cat(paste0("La variable ", var_filtro, " es tipo ", class(df[[var_filtro]]), "\n \n"))
+  # 3. Predictores
+  predictores <- c()
+  repeat {
+    cat("\014")
+    cli::cli_h1("DEFINICIÓN DEL MODELO")
+    dispo_modelo <- setdiff(names(df), c(nucleo, predictores))
+    cli::cli_inform("Disponibles: {.var {paste(dispo_modelo, collapse = ', ')}}")
+    cat("\nSeleccionadas: [", paste(predictores, collapse = " + "), "]\n")
 
-  if (class(df[[var_filtro]]) != "numeric") {
-    cat("por ahora solo tenemos filtro para variables numéricas. \n") # Aquí luego podemos filtrar por n dentro de cada nivel o por ds
-  } else {
-    var_min <- as.numeric(readline(prompt = "Rango mínimo: "))
-    var_max <- as.numeric(readline(prompt = "Rango máximo: "))
+    entrada <- readline(prompt = "Ingrese variable (o 'FIN' para procesar, 'SALIR' para abortar): ")
+    entrada <- verificar_salida(entrada)
 
-    df_temp <- df %>%
-      filter(df[[var_filtro]] >= var_min & df[[var_filtro]] <= var_max)
+    if (toupper(entrada) == "FIN") {
+      if(length(predictores) > 0) break
+      cli::cli_alert_danger("¡Meté al menos una variable, manito!")
+      next
+    }
 
-    filtrados <- nrow(df) - nrow(df_temp)
-
-    cat(paste0("fueron filtrados ", filtrados, " registros. \n"))
-    guardar_filtro <- as.logical(readline(prompt = "¿Desea guardar el filtro?: [TRUE / FALSE] "))
-
-    if(guardar_filtro){
-      df <- df_temp
-      cat("Filtro realizado \n")
-      head(df)
+    if (entrada %in% dispo_modelo) {
+      predictores <- c(predictores, entrada)
+    } else {
+      cli::cli_alert_danger("Variable no válida o ya seleccionada.")
     }
   }
-  filtrar <- as.logical(readline(prompt = "¿Desea realizar otro filtro?: [TRUE / FALSE] "))
-}
 
-# AJUSTES MULTIPLICATIVOS
-cat("\n \n VARIABLES PARA EL MODELO. \n \n")
+  # --- 3.5 NATURALEZA DE LAS VARIABLES ---
+  cat("\014")
+  cli::cli_h1("NATURALEZA DE LOS PREDICTORES")
+  for (pred in predictores) {
+    # Si ya es texto o factor, R ya sabe que es categórica
+    if (is.character(df[[pred]]) || is.factor(df[[pred]])) {
+      df[[pred]] <- as.factor(df[[pred]])
+      cli::cli_alert_info("'{pred}' detectada y asignada como CATEGÓRICA.")
+    } else {
+      # Si es numérica, le preguntamos al usuario
+      cli::cli_inform("\nLa variable {.var {pred}} es numérica. ¿Cómo deseas tratarla?")
+      tipo <- utils::menu(c(
+        "Continua (Calculará una pendiente / Beta único)",
+        "Categórica (Factor - Calculará efectos por nivel)"
+      ), title = paste("Naturaleza de", pred))
 
-cat("Aviso: Los ajustes se realizarán en base a las variables significativas en el modelo StepWise \n \n")
-
-# Vector para las variables del modelo
-variables_modelo <- c()
-
-repeat {
-  cat("Variables disponibles en el data.frame:\n")
-  print(names(df))
-  nueva_var <- readline(prompt = "Ingrese una variable para el modelo (o escriba FIN para terminar): ")
-
-  if (nueva_var == "FIN") break
-
-  if (!(nueva_var %in% names(df))) {
-    cat("La variable no existe en el data.frame.\n")
-  } else if (nueva_var == variable) {
-    cat("Esa es la variable dependiente. No puede incluirse como predictora.\n")
-  } else if (nueva_var == padre) {
-    cat("Ese es el padre del individuo. No puede incluirse como predictora.\n")
-  } else if (nueva_var == madre) {
-    cat("Esa es la madre del individuo. No puede incluirse como predictora.\n")
-  } else if (nueva_var == id) {
-    cat("Ese es el id. No puede incluirse como predictora.\n")
-  } else if (nueva_var %in% variables_modelo) {
-    cat("Esa variable ya fue añadida al modelo.\n")
-  } else {
-    variables_modelo <- c(variables_modelo, nueva_var)
-    cat(paste0("Variable '", nueva_var, "' añadida al modelo.\n"))
+      if (tipo == 2) {
+        df[[pred]] <- as.factor(df[[pred]])
+        cli::cli_alert_success("'{pred}' convertida a CATEGÓRICA.")
+      } else if (tipo == 1) {
+        cli::cli_alert_success("'{pred}' se mantiene como CONTINUA.")
+      } else {
+        verificar_salida("SALIR") # Por si le da a la opción 0 para salir
+      }
+    }
   }
-}
+  readline(prompt = "\nPresione Enter para iniciar el ajuste del modelo...")
 
-cat("El modelo finalmente quedó: \n")
-modelo <- paste0(variable, " ~ ", paste(variables_modelo, collapse = " + "))
-cat(modelo)
+  # --- 4. CÁLCULOS Y STEPWISE ---
+  cat("\014")
+  cli::cli_process_start("Construyendo modelo inicial y ejecutando Stepwise...")
 
-cat("\n\nAviso: Se eliminarán los NA dentro de las variables del modelo \n")
-# Eliminar NA en las variables involucradas
-variables_usadas <- c(variable, variables_modelo)
-df <- df %>% drop_na(all_of(variables_usadas))
+  formula_str <- paste(var_y, "~", paste(predictores, collapse = " + "))
+  modelo_inicial <- lm(as.formula(formula_str), data = df)
+  modelo_step <- step(modelo_inicial, direction = "both", trace = 0)
 
+  cli::cli_process_done()
 
-# STEPWISE
-cat("\n \n STEPWISE. \n \n")
+  predictores_finales <- attr(terms(modelo_step), "term.labels")
 
-m1 <- lm(as.formula(paste0(variable, " ~ 1")), data = df)
-m2 <- lm(as.formula(paste0(variable, " ~ ", paste(variables_modelo, collapse = " + "))), data = df)
+  # Si el modelo quedó vacío (sin significancia)
+  if (length(predictores_finales) == 0) {
+    cli::cli_alert_danger("RESULTADO STEPWISE: No se encontraron efectos significativos.")
+    cli::cli_inform("El modelo se redujo a solo el intercepto ({var_y} ~ 1).")
 
-stepw <- step(m1, scope = list(lower = m1, upper = m2), direction = "both")
+    cat("\n")
+    cli::cli_h2("Análisis de Varianza Tipo III (Modelo Inicial)")
+    tryCatch({ print(car::Anova(modelo_inicial, type = "III")) },
+             error = function(e) cli::cli_alert_warning("Error Anova: {e$message}"))
 
-print(Anova(stepw, type = "III"))
-print(vif(stepw))
+    cat("\n")
+    cli::cli_h2("Pasos de eliminación (Stepwise)")
+    print(modelo_step$anova)
 
-anova_global <- Anova(stepw, type = "III")
-anova_df <- as.data.frame(anova_global)
-
-# Agregar nombres de filas como columna
-anova_df$Variable <- rownames(anova_df)
-
-# Filtrar por p < 0.1
-variables_significativas <- anova_df %>%
-  filter(`Pr(>F)` < 5 & Variable != "(Intercept)") %>%
-  pull(Variable)
-
-# Resultado
-cat(paste0("\n\nAviso: las variables significativas para ", variable, " fueron: ", paste(variables_significativas, collapse = " - ")))
-
-
-
-# AJUSTES
-cat("\n \n AJUSTES. \n \n")
-
-# Coeficientes del modelo ajustado con stepwise
-coefs <- coef(stepw)
-
-# Media de la variable dependiente (por ejemplo, pd)
-media_y <- mean(df[[variable]])
-
-# Vector para guardar los nombres de las columnas de FC
-fc_vars <- c()
-
-# Recorrer cada variable significativa
-for (var in variables_significativas) {
-
-  nombre_fc <- paste0("fc_", var)
-
-  if (is.numeric(df[[var]])) {
-    # Variable continua
-    beta <- coefs[var]
-    media_var <- mean(df[[var]])
-
-    df <- df %>%
-      mutate(!!nombre_fc := media_y / (media_y - beta * (!!sym(var) - media_var)))
-
-    fc_vars <- c(fc_vars, nombre_fc)
-
-  } else {
-    # Variable categórica
-    tabla_fc <- df %>%
-      group_by_at(var) %>%
-      summarise(media_var = mean(.data[[variable]], na.rm = TRUE), .groups = "drop") %>%
-      mutate(!!nombre_fc := media_var / max(media_var)) %>%
-      select(all_of(var), all_of(nombre_fc))
-
-    df <- left_join(df, tabla_fc, by = var)
-
-    fc_vars <- c(fc_vars, nombre_fc)
+    cli::cli_alert_info("Devolviendo el dataframe original sin modificaciones.")
+    return(df)
   }
+
+  # --- 5. RESULTADOS DEL MODELO GANADOR ---
+  cli::cli_h1("RESULTADOS DEL MODELO FINAL (STEPWISE)")
+  cli::cli_alert_success("Variables sobrevivientes: {.var {paste(predictores_finales, collapse = ', ')}}")
+
+  cat("\n")
+  cli::cli_h2("1. Significancia de Variables (car::Anova Tipo III)")
+  tryCatch({
+    print(car::Anova(modelo_step, type = "III"))
+  }, error = function(e) cli::cli_alert_warning("Error Anova: {e$message}"))
+
+  cat("\n")
+  cli::cli_h2("2. Solución de Efectos Fijos (Betas)")
+  print(summary(modelo_step)$coefficients)
+
+  readline(prompt = "\nRevise los resultados arriba. Presione Enter para aplicar los factores de corrección al dataframe...")
+
+  # --- 6. CÁLCULO DE FACTORES (El código que ya arreglamos) ---
+  cli::cli_process_start("Calculando factores de corrección...")
+
+  df$variable_ajust <- df[[var_y]]
+
+  for (pred in predictores_finales) {
+    col_fc <- paste0("fc_", pred)
+    df[[col_fc]] <- 0
+
+    if (is.numeric(df[[pred]])) {
+      # Variable Continua
+      beta <- coef(modelo_step)[pred]
+      if (!is.na(beta)) {
+        media_ref <- mean(df[[pred]], na.rm = TRUE)
+        df[[col_fc]] <- beta * (media_ref - df[[pred]])
+      }
+    } else {
+      # Variable Categórica (Factor)
+      coeficientes <- coef(modelo_step)
+      coefs_var <- coeficientes[startsWith(names(coeficientes), pred)]
+
+      for (nombre_coef in names(coefs_var)) {
+        beta <- coefs_var[nombre_coef]
+        if (!is.na(beta)) {
+          nivel <- sub(paste0("^", pred), "", nombre_coef)
+          idx <- which(as.character(df[[pred]]) == nivel)
+          if (length(idx) > 0) {
+            df[[col_fc]][idx] <- -1 * beta
+          }
+        }
+      }
+    }
+    df$variable_ajust <- df$variable_ajust + df[[col_fc]]
+  }
+
+  cli::cli_process_done()
+  return(df)
 }
-
-# Aplicar los factores de corrección al valor original
-nombre_ajustado <- paste0(variable, "_ajust")
-
-df <- df %>%
-  mutate(!!nombre_ajustado := .data[[variable]] * reduce(across(all_of(fc_vars)), `*`))
-}
-
-

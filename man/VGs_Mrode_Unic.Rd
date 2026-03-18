@@ -7,21 +7,17 @@
 VGs_Mrode_Unic(df, h2, i)
 }
 \arguments{
-\item{df}{data.frame con registros ajustados (recomendado: correr antes AjustEfectFix()) asignados a un id}
+\item{df}{data.frame con registros ajustados asignados a un id.}
 
-\item{h2}{Heredabilidad}
+\item{h2}{Heredabilidad (valor numérico entre 0 y 1).}
 
-\item{i}{Intensidad de selección}
+\item{i}{Intensidad de selección (valor numérico).}
 }
 \value{
-Data.frame con VG, precisión y ranking
+Data.frame con VG, precisión, progreso genético y ranking.
 }
 \description{
 Esta función y todas las del paquete están basadas en el cálculo de VGs por
 ayudas de selección propuestas por Mrode en su libro:
 LINEAR MODELS FOR THE PREDICTION OF ANIMAL BREEDING VALUES - SECOND EDITION
-}
-\details{
-Esta función utiliza para el cálculo del VG una medida única propia de cada animal
-En la ejecución de la función se pedirá por consola la variable a evaluar
 }

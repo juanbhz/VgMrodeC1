@@ -2,21 +2,21 @@
 % Please edit documentation in R/VGs_Mrode_repetidos.R
 \name{VGs_Mrode_repetidos}
 \alias{VGs_Mrode_repetidos}
-\title{Estima valores genéticos individuales en base a registros propios repetidos (variables que se toman varias veces durante la vida del individuo)}
+\title{Estima valores genéticos individuales en base a registros propios repetidos}
 \usage{
 VGs_Mrode_repetidos(df, h2, repet, i)
 }
 \arguments{
-\item{df}{data.frame con registros ajustados (recomendado: correr antes AjustEfectFix()) asignados a un id, además información de padre y madre}
+\item{df}{data.frame con registros ajustados asignados a un id.}
 
-\item{h2}{Heredabilidad}
+\item{h2}{Heredabilidad (valor numérico entre 0 y 1).}
 
-\item{repet}{Repetibilidad}
+\item{repet}{Repetibilidad (valor numérico entre 0 y 1).}
 
-\item{i}{Intensidad de selección}
+\item{i}{Intensidad de selección (valor numérico).}
 }
 \value{
-Data.frame con VG, precisión y ranking
+Data.frame con VG, precisión, progreso genético y ranking por individuo.
 }
 \description{
 Esta función y todas las del paquete están basadas en el cálculo de VGs por
@@ -24,10 +24,6 @@ ayudas de selección propuestas por Mrode en su libro:
 LINEAR MODELS FOR THE PREDICTION OF ANIMAL BREEDING VALUES - SECOND EDITION
 }
 \details{
-Esta función utiliza para el cálculo del VG propio basado en muestras repetidas para una variable
-
-En la ejecución de la función se pedirá por consola la variable a evaluar
-y la columna en la cuál se encuentran el id del individuo a evaluar
-
-Esta función además pide como entrada un valor de repetibilidad, para la variable a evaluar
+Esta función utiliza para el cálculo del VG propio basado en muestras repetidas
+para una variable (ej. peso al destete de diferentes camadas de una misma cerda).
 }

@@ -2,19 +2,19 @@
 % Please edit documentation in R/VGs_Mrode_progenie.R
 \name{VGs_Mrode_progenie}
 \alias{VGs_Mrode_progenie}
-\title{Estima valores genéticos individuales en base a registros de progenie (para padres y madres)}
+\title{Estima valores genéticos individuales en base a registros de progenie}
 \usage{
 VGs_Mrode_progenie(df, h2, i)
 }
 \arguments{
-\item{df}{data.frame con registros ajustados (recomendado: correr antes AjustEfectFix()) asignados a un id, además información de padre y madre}
+\item{df}{data.frame con registros ajustados asignados a un id, además de la información de padre y madre.}
 
-\item{h2}{Heredabilidad}
+\item{h2}{Heredabilidad (valor numérico entre 0 y 1).}
 
-\item{i}{Intensidad de selección}
+\item{i}{Intensidad de selección (valor numérico).}
 }
 \value{
-Data.frame con VG, precisión y ranking
+Una lista con dos data.frames: \code{VG_padres} y \code{VG_madres}, cada uno con VG, precisión y ranking.
 }
 \description{
 Esta función y todas las del paquete están basadas en el cálculo de VGs por
@@ -22,9 +22,6 @@ ayudas de selección propuestas por Mrode en su libro:
 LINEAR MODELS FOR THE PREDICTION OF ANIMAL BREEDING VALUES - SECOND EDITION
 }
 \details{
-Esta función utiliza para el cálculo del VG para padres y madres, utilizando los registros de
-sus diferentes crías.
-
-En la ejecución de la función se pedirá por consola la variable a evaluar
-y la columna en la cuál se encuentran los padres y madres
+Esta función calcula el VG para padres y madres utilizando el promedio de los
+registros fenotípicos de sus crías (Half-sib / Full-sib evaluation).
 }

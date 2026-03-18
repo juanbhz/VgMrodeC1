@@ -2,23 +2,37 @@
 % Please edit documentation in R/AjustEfectFix.R
 \name{AjustEfectFix}
 \alias{AjustEfectFix}
-\title{Realizar ajustes por los efectos fijos de un modelo lineal}
+\title{Realizar ajustes por efectos fijos de forma interactiva}
 \usage{
 AjustEfectFix(df)
 }
 \arguments{
-\item{df}{Un data.frame con información de ID, Padre, Madre, Variable Y, y Variables del modelo}
+\item{df}{Un data.frame que contenga todas las variables potenciales para el análisis.}
 }
 \value{
-el dataframe inicial más los factores de ajuste para los efectos utilizados y un Y_ajust
+Un data.frame (tibble) que contiene las columnas originales, los factores de
+corrección generados (\code{fc_variable}) y la variable final ajustada (\code{variable_ajust}).
 }
 \description{
-Esta función toma los valores reales de alguna característica y los ajusta
-por los efectos significativos que indica el modelo stepwise
-Además tiene un apartado para realizar filtros de variables numéricas
+Esta función guía al usuario a través de una interfaz de consola para:
+\enumerate{
+\item Seleccionar variables núcleo (Y, ID, Padre, Madre).
+\item Aplicar filtros numéricos opcionales.
+\item Definir un modelo lineal inicial.
+\item Ejecutar un proceso Stepwise (AIC) para seleccionar efectos significativos.
+\item Calcular factores de corrección (FC) y generar una variable ajustada.
+}
 }
 \details{
-En la ejecución de la función se pedirá por consola la variable a evaluar
-además también se pedirá por consola información adicional, como variables a filtrar y sus filtros
-y las variables que quiere añadir al modelo stepwise
+La función utiliza \code{step()} para la selección de variables. Si el modelo resultante
+queda vacío (solo intercepto), la función se detiene con un aviso para evitar errores en
+el cálculo de VIF o ANOVA. Los factores de corrección para variables continuas se basan
+en la pendiente (beta), mientras que para categóricas se basan en la relación entre
+medias de niveles.
+}
+\examples{
+\dontrun{
+# Supongamos que tienes un dataframe llamado 'mis_cerdos'
+df_ajustado <- AjustEfectFix(mis_cerdos)
+}
 }
