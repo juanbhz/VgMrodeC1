@@ -1,6 +1,6 @@
 Package: VgMrodeC1
 Title: Estimación de vg por ayudas de selección
-Version: 1.0
+Version: 1.1
 Authors@R: 
     person("Juan", "Bonilla", , "jubonillah@unal.edu.co", role = c("aut", "cre"), comment = c(ORCID = "0009-0006-4219-2161"))
 Description: Description: Herramienta para el cálculo de valores genéticos basada en métodos de selección propuestos por Mrode. Ideal para situaciones donde no se cuenta con genealogía completa o información fenotípica suficiente para ajustar un modelo animal.
